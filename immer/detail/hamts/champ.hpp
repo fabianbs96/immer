@@ -308,40 +308,26 @@ struct champ
     }
 
     template <typename Fn>
-    void for_each_chunk(Fn&& fn) const
-    {
-        for_each_chunk_traversal(root, 0, fn);
-    }
-
-    template <typename Fn>
-    void
-    for_each_chunk_traversal(const node_t* node, count_t depth, Fn&& fn) const
-    {
-        if (depth < max_depth<B>) {
-            auto datamap = node->datamap();
-            if (datamap)
-                fn(node->values(), node->values() + node->data_count());
-            auto nodemap = node->nodemap();
-            if (nodemap) {
-                auto fst = node->children();
-                auto lst = fst + node->children_count();
-                for (; fst != lst; ++fst)
-                    for_each_chunk_traversal(*fst, depth + 1, fn);
-            }
-        } else {
-            fn(node->collisions(),
-               node->collisions() + node->collision_count());
-        }
-    }
-
-    template <typename Fn>
-    bool for_each_chunk_p(Fn&& fn) const
+    bool for_each_chunk_p(Fn fn) const
     {
         struct State
         {
             const node_t* const* fst{};
             const node_t* const* lst{};
         };
+
+        using FnRetTy = decltype(IMMER_INVOKE(
+            fn, std::declval<const T*>(), std::declval<const T*>()));
+
+#define IMMER_INVOKE_OR_EXIT(from, to)                                         \
+    if constexpr (std::is_void<FnRetTy>::value) {                              \
+        IMMER_INVOKE(fn, from, to);                                            \
+    } else {                                                                   \
+        if (!IMMER_INVOKE(fn, from, to)) {                                     \
+            return false;                                                      \
+        }                                                                      \
+    }                                                                          \
+    (void) 0
 
         std::array<State, max_depth<B> + 1> stack{};
         stack[0]     = {&root, &root + 1};
@@ -363,9 +349,9 @@ struct champ
 
             if (depth < max_depth<B>) {
                 auto datamap = node->datamap();
-                if (datamap &&
-                    !fn(node->values(), node->values() + node->data_count())) {
-                    return false;
+                if (datamap) {
+                    IMMER_INVOKE_OR_EXIT(node->values(),
+                                         node->values() + node->data_count());
                 }
 
                 auto nodemap = node->nodemap();
@@ -380,13 +366,39 @@ struct champ
                 continue;
             }
 
-            if (!fn(node->collisions(),
-                    node->collisions() + node->collision_count())) {
-                return false;
-            }
+            IMMER_INVOKE_OR_EXIT(node->collisions(),
+                                 node->collisions() + node->collision_count());
             --depth;
         }
+#undef IMMER_INVOKE_OR_EXIT
         return true;
+    }
+
+    template <typename Fn>
+    void for_each_chunk(Fn fn) const
+    {
+        for_each_chunk_p(std::move(fn));
+    }
+
+    template <typename Fn>
+    void
+    for_each_chunk_traversal(const node_t* node, count_t depth, Fn&& fn) const
+    {
+        if (depth < max_depth<B>) {
+            auto datamap = node->datamap();
+            if (datamap)
+                fn(node->values(), node->values() + node->data_count());
+            auto nodemap = node->nodemap();
+            if (nodemap) {
+                auto fst = node->children();
+                auto lst = fst + node->children_count();
+                for (; fst != lst; ++fst)
+                    for_each_chunk_traversal(*fst, depth + 1, fn);
+            }
+        } else {
+            fn(node->collisions(),
+               node->collisions() + node->collision_count());
+        }
     }
 
     template <typename EqualValue, typename Differ>

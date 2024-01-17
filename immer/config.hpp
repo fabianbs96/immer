@@ -121,6 +121,13 @@
 #endif
 #endif
 
+#ifdef __cpp_lib_invoke
+#include <functional>
+#define IMMER_INVOKE(fn, ...) ::std::invoke((fn), ##__VA_ARGS__)
+#else
+#define IMMER_INVOKE(fn, ...) (fn)(__VA_ARGS__)
+#endif
+
 namespace immer {
 
 const auto default_bits           = 5;
