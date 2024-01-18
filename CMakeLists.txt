@@ -40,7 +40,7 @@ option(immer_BUILD_EXAMPLES "Build examples" ON)
 option(immer_BUILD_DOCS "Build docs" ON)
 option(immer_BUILD_EXTRAS "Build extras" ON)
 
-set(CXX_STANDARD 14 CACHE STRING "c++ standard number")
+set(CXX_STANDARD 17 CACHE STRING "c++ standard number")
 
 set(CMAKE_CXX_STANDARD ${CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED on)

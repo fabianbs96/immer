@@ -308,7 +308,7 @@ struct champ
     }
 
     template <typename Fn>
-    bool for_each_chunk_p(Fn fn) const
+    inline bool for_each_chunk_p(Fn fn) const
     {
         struct State
         {
@@ -375,7 +375,7 @@ struct champ
     }
 
     template <typename Fn>
-    void for_each_chunk(Fn fn) const
+    inline void for_each_chunk(Fn fn) const
     {
         for_each_chunk_p(std::move(fn));
     }

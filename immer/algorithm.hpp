@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "immer/detail/util.hpp"
+
 #include <algorithm>
 #include <cassert>
 #include <functional>
@@ -40,21 +42,21 @@ namespace immer {
  * @endrst
  */
 template <typename Range, typename Fn>
-void for_each_chunk(const Range& r, Fn&& fn)
+inline void for_each_chunk(const Range& r, Fn&& fn)
 {
-    r.impl().for_each_chunk(std::forward<Fn>(fn));
+    r.impl().for_each_chunk(detail::ref_or_move(fn));
 }
 
 template <typename Iterator, typename Fn>
-void for_each_chunk(const Iterator& first, const Iterator& last, Fn&& fn)
+inline void for_each_chunk(const Iterator& first, const Iterator& last, Fn&& fn)
 {
     assert(&first.impl() == &last.impl());
     first.impl().for_each_chunk(
-        first.index(), last.index(), std::forward<Fn>(fn));
+        first.index(), last.index(), detail::ref_or_move(fn));
 }
 
 template <typename T, typename Fn>
-void for_each_chunk(const T* first, const T* last, Fn&& fn)
+inline void for_each_chunk(const T* first, const T* last, Fn&& fn)
 {
     std::forward<Fn>(fn)(first, last);
 }
@@ -74,21 +76,22 @@ void for_each_chunk(const T* first, const T* last, Fn&& fn)
  * @endrst
  */
 template <typename Range, typename Fn>
-bool for_each_chunk_p(const Range& r, Fn&& fn)
+inline bool for_each_chunk_p(const Range& r, Fn&& fn)
 {
-    return r.impl().for_each_chunk_p(std::forward<Fn>(fn));
+    return r.impl().for_each_chunk_p(detail::ref_or_move(fn));
 }
 
 template <typename Iterator, typename Fn>
-bool for_each_chunk_p(const Iterator& first, const Iterator& last, Fn&& fn)
+inline bool
+for_each_chunk_p(const Iterator& first, const Iterator& last, Fn&& fn)
 {
     assert(&first.impl() == &last.impl());
     return first.impl().for_each_chunk_p(
-        first.index(), last.index(), std::forward<Fn>(fn));
+        first.index(), last.index(), detail::ref_or_move(fn));
 }
 
 template <typename T, typename Fn>
-bool for_each_chunk_p(const T* first, const T* last, Fn&& fn)
+inline bool for_each_chunk_p(const T* first, const T* last, Fn&& fn)
 {
     return std::forward<Fn>(fn)(first, last);
 }
@@ -96,7 +99,7 @@ bool for_each_chunk_p(const T* first, const T* last, Fn&& fn)
 namespace detail {
 
 template <class Iter, class T>
-T accumulate_move(Iter first, Iter last, T init)
+inline T accumulate_move(Iter first, Iter last, T init)
 {
     for (; first != last; ++first)
         init = std::move(init) + *first;
@@ -104,7 +107,7 @@ T accumulate_move(Iter first, Iter last, T init)
 }
 
 template <class Iter, class T, class Fn>
-T accumulate_move(Iter first, Iter last, T init, Fn op)
+inline T accumulate_move(Iter first, Iter last, T init, Fn op)
 {
     for (; first != last; ++first)
         init = op(std::move(init), *first);
@@ -117,7 +120,7 @@ T accumulate_move(Iter first, Iter last, T init, Fn op)
  * Equivalent of `std::accumulate` applied to the range `r`.
  */
 template <typename Range, typename T>
-T accumulate(Range&& r, T init)
+inline T accumulate(Range&& r, T init)
 {
     for_each_chunk(r, [&](auto first, auto last) {
         init = detail::accumulate_move(first, last, init);
@@ -126,7 +129,7 @@ T accumulate(Range&& r, T init)
 }
 
 template <typename Range, typename T, typename Fn>
-T accumulate(Range&& r, T init, Fn fn)
+inline T accumulate(Range&& r, T init, Fn fn)
 {
     for_each_chunk(r, [&](auto first, auto last) {
         init = detail::accumulate_move(first, last, init, fn);
@@ -139,7 +142,7 @@ T accumulate(Range&& r, T init, Fn fn)
  * last) @f$.
  */
 template <typename Iterator, typename T>
-T accumulate(Iterator first, Iterator last, T init)
+inline T accumulate(Iterator first, Iterator last, T init)
 {
     for_each_chunk(first, last, [&](auto first, auto last) {
         init = detail::accumulate_move(first, last, init);
@@ -148,7 +151,7 @@ T accumulate(Iterator first, Iterator last, T init)
 }
 
 template <typename Iterator, typename T, typename Fn>
-T accumulate(Iterator first, Iterator last, T init, Fn fn)
+inline T accumulate(Iterator first, Iterator last, T init, Fn fn)
 {
     for_each_chunk(first, last, [&](auto first, auto last) {
         init = detail::accumulate_move(first, last, init, fn);
@@ -160,9 +163,9 @@ T accumulate(Iterator first, Iterator last, T init, Fn fn)
  * Equivalent of `std::for_each` applied to the range `r`.
  */
 template <typename Range, typename Fn>
-Fn&& for_each(Range&& r, Fn&& fn)
+inline Fn&& for_each(Range&& r, Fn&& fn)
 {
-    for_each_chunk(r, [&](auto first, auto last) {
+    for_each_chunk(r, [fn = detail::ref_or_move(fn)](auto first, auto last) {
         for (; first != last; ++first)
             fn(*first);
     });
@@ -174,12 +177,13 @@ Fn&& for_each(Range&& r, Fn&& fn)
  * last) @f$.
  */
 template <typename Iterator, typename Fn>
-Fn&& for_each(Iterator first, Iterator last, Fn&& fn)
+inline Fn&& for_each(Iterator first, Iterator last, Fn&& fn)
 {
-    for_each_chunk(first, last, [&](auto first, auto last) {
-        for (; first != last; ++first)
-            fn(*first);
-    });
+    for_each_chunk(
+        first, last, [fn = detail::ref_or_move(fn)](auto first, auto last) {
+            for (; first != last; ++first)
+                fn(*first);
+        });
     return std::forward<Fn>(fn);
 }
 
@@ -187,7 +191,7 @@ Fn&& for_each(Iterator first, Iterator last, Fn&& fn)
  * Equivalent of `std::copy` applied to the range `r`.
  */
 template <typename Range, typename OutIter>
-OutIter copy(Range&& r, OutIter out)
+inline OutIter copy(Range&& r, OutIter out)
 {
     for_each_chunk(
         r, [&](auto first, auto last) { out = std::copy(first, last, out); });
@@ -199,7 +203,7 @@ OutIter copy(Range&& r, OutIter out)
  * last) @f$.
  */
 template <typename InIter, typename OutIter>
-OutIter copy(InIter first, InIter last, OutIter out)
+inline OutIter copy(InIter first, InIter last, OutIter out)
 {
     for_each_chunk(first, last, [&](auto first, auto last) {
         out = std::copy(first, last, out);
@@ -211,10 +215,12 @@ OutIter copy(InIter first, InIter last, OutIter out)
  * Equivalent of `std::all_of` applied to the range `r`.
  */
 template <typename Range, typename Pred>
-bool all_of(Range&& r, Pred p)
+inline bool all_of(Range&& r, Pred p)
 {
     return for_each_chunk_p(
-        r, [&](auto first, auto last) { return std::all_of(first, last, p); });
+        r, [p = detail::ref_or_move(p)](auto first, auto last) {
+            return std::all_of(first, last, p);
+        });
 }
 
 /*!
@@ -222,11 +228,12 @@ bool all_of(Range&& r, Pred p)
  * @f$.
  */
 template <typename Iter, typename Pred>
-bool all_of(Iter first, Iter last, Pred p)
+inline bool all_of(Iter first, Iter last, Pred p)
 {
-    return for_each_chunk_p(first, last, [&](auto first, auto last) {
-        return std::all_of(first, last, p);
-    });
+    return for_each_chunk_p(
+        first, last, [p = detail::ref_or_move(p)](auto first, auto last) {
+            return std::all_of(first, last, p);
+        });
 }
 
 /*!
@@ -254,10 +261,11 @@ struct differ
  * Produces a @a differ object with `added`, `removed` and `changed` functions.
  */
 template <class AddedFn, class RemovedFn, class ChangedFn>
-auto make_differ(AddedFn&& added, RemovedFn&& removed, ChangedFn&& changed)
-    -> differ<std::decay_t<AddedFn>,
-              std::decay_t<RemovedFn>,
-              std::decay_t<ChangedFn>>
+inline auto make_differ(AddedFn&& added,
+                        RemovedFn&& removed,
+                        ChangedFn&& changed) -> differ<std::decay_t<AddedFn>,
+                                                       std::decay_t<RemovedFn>,
+                                                       std::decay_t<ChangedFn>>
 {
     return {std::forward<AddedFn>(added),
             std::forward<RemovedFn>(removed),
@@ -269,7 +277,7 @@ auto make_differ(AddedFn&& added, RemovedFn&& removed, ChangedFn&& changed)
  * `changed` function.
  */
 template <class AddedFn, class RemovedFn>
-auto make_differ(AddedFn&& added, RemovedFn&& removed)
+inline auto make_differ(AddedFn&& added, RemovedFn&& removed)
 {
     return make_differ(std::forward<AddedFn>(added),
                        std::forward<RemovedFn>(removed),
@@ -304,7 +312,7 @@ auto make_differ(AddedFn&& added, RemovedFn&& removed)
  * @endrst
  */
 template <typename T, typename Differ>
-void diff(const T& a, const T& b, Differ&& differ)
+inline void diff(const T& a, const T& b, Differ&& differ)
 {
     a.impl().template diff<std::equal_to<typename T::value_type>>(
         b.impl(), std::forward<Differ>(differ));
@@ -315,7 +323,7 @@ void diff(const T& a, const T& b, Differ&& differ)
  * differ.  Equivalent to `diff(a, b, make_differ(fns)...)`.
  */
 template <typename T, typename... Fns>
-void diff(const T& a, const T& b, Fns&&... fns)
+inline void diff(const T& a, const T& b, Fns&&... fns)
 {
     diff(a, b, make_differ(std::forward<Fns>(fns)...));
 }

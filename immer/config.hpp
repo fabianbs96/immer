@@ -121,11 +121,17 @@
 #endif
 #endif
 
-#ifdef __cpp_lib_invoke
+#ifdef IMMER_HAS_CPP17
 #include <functional>
 #define IMMER_INVOKE(fn, ...) ::std::invoke((fn), ##__VA_ARGS__)
 #else
 #define IMMER_INVOKE(fn, ...) (fn)(__VA_ARGS__)
+#endif
+
+#ifdef IMMER_HAS_CPP17
+#define IMMER_CXX17_CONSTEXPR constexpr
+#else
+#define IMMER_CXX17_CONSTEXPR inline
 #endif
 
 namespace immer {
