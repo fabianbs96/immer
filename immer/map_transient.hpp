@@ -267,6 +267,15 @@ public:
             *this, std::move(k), std::forward<Fn>(fn));
     }
 
+    template <typename Fn, typename ValueEquals = std::equal_to<mapped_type>>
+    void try_update(key_type k, Fn&& fn, ValueEquals valueEquals = {})
+    {
+        impl_.template try_update_mut<typename persistent_type::project_value,
+                                      typename persistent_type::default_value,
+                                      typename persistent_type::combine_value>(
+            *this, std::move(k), std::forward<Fn>(fn), std::move(valueEquals));
+    }
+
     /*!
      * Replaces the association `(k, v)` by the association new association `(k,
      * fn(v))`, where `v` is the currently associated value for `k` in the map
@@ -306,7 +315,8 @@ private:
 
     map_transient(impl_t impl)
         : impl_(std::move(impl))
-    {}
+    {
+    }
 
     impl_t impl_ = impl_t::empty();
 

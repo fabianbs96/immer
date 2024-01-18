@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "immer/detail/util.hpp"
 #include <immer/config.hpp>
 #include <immer/detail/hamts/node.hpp>
 
@@ -927,7 +928,7 @@ struct champ
         static update_result
         do_try_update(node_t* node,
                       byval_if_possible<K> k,
-                      byval_if_possible<std::decay_t<Fn>, Fn&&> fn,
+                      Fn fn,
                       byval_if_possible<ValueEquals> valueEquals,
                       hash_t hash,
                       shift_t shift)
@@ -937,8 +938,8 @@ struct champ
                 auto lst = fst + node->collision_count();
                 for (; fst != lst; ++fst)
                     if (Equal{}(*fst, k)) {
-                        auto&& new_value = std::forward<Fn>(fn)(
-                            Project{}(detail::as_const(*fst)));
+                        auto&& new_value =
+                            fn(Project{}(detail::as_const(*fst)));
                         if (valueEquals(detail::as_const(new_value),
                                         Project{}(detail::as_const(*fst))))
                             return {nullptr, false};
@@ -951,11 +952,10 @@ struct champ
                                                   new_value))),
                                 false};
                     }
-                return {node_t::copy_collision_insert(
-                            node,
-                            Combine{}(std::forward<K>(k),
-                                      std::forward<Fn>(fn)(Default{}()))),
-                        true};
+                return {
+                    node_t::copy_collision_insert(
+                        node, Combine{}(std::forward<K>(k), fn(Default{}()))),
+                    true};
             } else {
                 auto idx = (hash & (mask<B> << shift)) >> shift;
                 auto bit = bitmap_t{1u} << idx;
@@ -963,7 +963,7 @@ struct champ
                     auto offset = node->children_count(bit);
                     auto result = do_try_update(node->children()[offset],
                                                 k,
-                                                std::forward<Fn>(fn),
+                                                fn,
                                                 valueEquals,
                                                 hash,
                                                 shift + B);
@@ -983,8 +983,8 @@ struct champ
                     auto offset = node->data_count(bit);
                     auto val    = node->values() + offset;
                     if (Equal{}(*val, k)) {
-                        auto&& new_value = std::forward<Fn>(fn)(
-                            Project{}(detail::as_const(*val)));
+                        auto&& new_value =
+                            fn(Project{}(detail::as_const(*val)));
                         if (detail::as_const(new_value) ==
                             Project{}(detail::as_const(*val)))
                             return {nullptr, false};
@@ -999,8 +999,7 @@ struct champ
                     } else {
                         auto child = node_t::make_merged(
                             shift + B,
-                            Combine{}(std::forward<K>(k),
-                                      std::forward<Fn>(fn)(Default{}())),
+                            Combine{}(std::forward<K>(k), fn(Default{}())),
                             hash,
                             *val,
                             Hash{}(*val));
@@ -1018,8 +1017,7 @@ struct champ
                     return {node_t::copy_inner_insert_value(
                                 node,
                                 bit,
-                                Combine{}(std::forward<K>(k),
-                                          std::forward<Fn>(fn)(Default{}()))),
+                                Combine{}(std::forward<K>(k), fn(Default{}()))),
                             true};
                 }
             }
@@ -1029,7 +1027,7 @@ struct champ
         do_try_update_mut(edit_t e,
                           node_t* node,
                           byval_if_possible<K> k,
-                          byval_if_possible<Fn, Fn&&> fn,
+                          Fn fn,
                           byval_if_possible<ValueEquals> valueEquals,
                           hash_t hash,
                           shift_t shift)
@@ -1039,8 +1037,8 @@ struct champ
                 auto lst = fst + node->collision_count();
                 for (; fst != lst; ++fst)
                     if (Equal{}(*fst, k)) {
-                        auto&& new_value = std::forward<Fn>(fn)(
-                            Project{}(detail::as_const(*fst)));
+                        auto&& new_value =
+                            fn(Project{}(detail::as_const(*fst)));
                         if (valueEquals(detail::as_const(new_value),
                                         Project{}(detail::as_const(*fst)))) {
                             return {nullptr, false, false};
@@ -1061,8 +1059,7 @@ struct champ
                             return {node_t::owned(r, e), false, false};
                         }
                     }
-                auto v      = Combine{}(std::forward<K>(k),
-                                   std::forward<Fn>(fn)(Default{}()));
+                auto v      = Combine{}(std::forward<K>(k), fn(Default{}()));
                 auto mutate = node->can_mutate(e);
                 auto r =
                     mutate ? node_t::move_collision_insert(node, std::move(v))
@@ -1075,13 +1072,8 @@ struct champ
                     auto offset = node->children_count(bit);
                     auto child  = node->children()[offset];
                     if (node->can_mutate(e)) {
-                        auto result = do_try_update_mut(e,
-                                                        child,
-                                                        k,
-                                                        std::forward<Fn>(fn),
-                                                        valueEquals,
-                                                        hash,
-                                                        shift + B);
+                        auto result = do_try_update_mut(
+                            e, child, k, fn, valueEquals, hash, shift + B);
                         if (!result.node)
                             return result;
 
@@ -1090,12 +1082,8 @@ struct champ
                             node_t::delete_deep_shift(child, shift + B);
                         return {node, result.added, true};
                     } else {
-                        auto result = do_try_update(child,
-                                                    k,
-                                                    std::forward<Fn>(fn),
-                                                    valueEquals,
-                                                    hash,
-                                                    shift + B);
+                        auto result = do_try_update(
+                            child, k, fn, valueEquals, hash, shift + B);
                         if (!result.node)
                             return {nullptr, false, false};
 
@@ -1115,9 +1103,9 @@ struct champ
                     auto val    = node->values() + offset;
                     if (Equal{}(*val, k)) {
                         if (node->can_mutate(e)) {
-                            auto vals        = node->ensure_mutable_values(e);
-                            auto&& new_value = std::forward<Fn>(fn)(
-                                Project{}(detail::as_const(vals[offset])));
+                            auto vals = node->ensure_mutable_values(e);
+                            auto&& new_value =
+                                fn(Project{}(detail::as_const(vals[offset])));
                             if (valueEquals(
                                     detail::as_const(new_value),
                                     Project{}(detail::as_const(vals[offset]))))
@@ -1128,8 +1116,8 @@ struct champ
                                 std::forward<decltype(new_value)>(new_value));
                             return {node, false, true};
                         } else {
-                            auto&& new_value = std::forward<Fn>(fn)(
-                                Project{}(detail::as_const(*val)));
+                            auto&& new_value =
+                                fn(Project{}(detail::as_const(*val)));
                             if (valueEquals(detail::as_const(new_value),
                                             Project{}(detail::as_const(*val))))
                                 return {nullptr, false, false};
@@ -1150,8 +1138,7 @@ struct champ
                         auto child = node_t::make_merged_e(
                             e,
                             shift + B,
-                            Combine{}(std::forward<K>(k),
-                                      std::forward<Fn>(fn)(Default{}())),
+                            Combine{}(std::forward<K>(k), fn(Default{}())),
                             hash,
                             mutate_values ? std::move(*val) : *val,
                             hash2);
@@ -1170,11 +1157,10 @@ struct champ
                     }
                 } else {
                     auto mutate = node->can_mutate(e);
-                    auto v      = Combine{}(std::forward<K>(k),
-                                       std::forward<Fn>(fn)(Default{}()));
-                    auto r      = mutate ? node_t::move_inner_insert_value(
+                    auto v = Combine{}(std::forward<K>(k), fn(Default{}()));
+                    auto r = mutate ? node_t::move_inner_insert_value(
                                           e, node, bit, std::move(v))
-                                         : node_t::copy_inner_insert_value(
+                                    : node_t::copy_inner_insert_value(
                                           node, bit, std::move(v));
                     return {node_t::owned_values(r, e), true, mutate};
                 }
@@ -1191,9 +1177,18 @@ struct champ
     champ try_update(const K& k, Fn&& fn, ValueEquals valueEquals = {}) const
     {
         auto hash = Hash{}(k);
-        auto res  = TryUpdater<Project, Default, Combine, K, Fn, ValueEquals>::
-            do_try_update(
-                root, k, std::forward<Fn>(fn), std::move(valueEquals), hash, 0);
+        auto res =
+            TryUpdater<Project,
+                       Default,
+                       Combine,
+                       std::decay_t<K>,
+                       std::decay_t<Fn>,
+                       ValueEquals>::do_try_update(root,
+                                                   k,
+                                                   detail::ref_or_fwd<Fn>(fn),
+                                                   std::move(valueEquals),
+                                                   hash,
+                                                   0);
         if (!res.node)
             return {root->inc(), size};
 
@@ -1395,11 +1390,11 @@ struct champ
               typename Combine,
               typename K,
               typename Fn>
-    void update_mut(edit_t e, const K& k, Fn&& fn)
+    void update_mut(edit_t e, K&& k, Fn&& fn)
     {
         auto hash = Hash{}(k);
         auto res  = do_update_mut<Project, Default, Combine>(
-            e, root, k, std::forward<Fn>(fn), hash, 0);
+            e, root, std::forward<K>(k), std::forward<Fn>(fn), hash, 0);
         if (!res.mutated && root->dec())
             node_t::delete_deep(root, 0);
         root = res.node;
@@ -1412,12 +1407,23 @@ struct champ
               typename K,
               typename Fn,
               typename ValueEquals>
-    void try_update_mut(edit_t e, const K& k, Fn&& fn, ValueEquals valueEquals)
+    void try_update_mut(edit_t e, K&& k, Fn&& fn, ValueEquals valueEquals)
     {
         auto hash = Hash{}(k);
-        auto res  = TryUpdater<Project, Default, Combine, K, Fn, ValueEquals>::
-            do_try_update_mut(
-                e, root, k, std::forward<Fn>(fn), valueEquals, hash, 0);
+        auto res =
+            TryUpdater<Project,
+                       Default,
+                       Combine,
+                       std::decay_t<K>,
+                       std::decay_t<Fn>,
+                       ValueEquals>::do_try_update_mut(e,
+                                                       root,
+                                                       std::forward<K>(k),
+                                                       detail::ref_or_fwd<Fn>(
+                                                           fn),
+                                                       valueEquals,
+                                                       hash,
+                                                       0);
         if (!res.node)
             return;
 

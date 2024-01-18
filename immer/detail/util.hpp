@@ -330,5 +330,15 @@ static IMMER_CXX17_CONSTEXPR auto ref_or_move(T& fn) noexcept
     }
 }
 
+template <typename T>
+static IMMER_CXX17_CONSTEXPR auto ref_or_fwd(T& fn) noexcept
+{
+    if constexpr (can_efficiently_pass_by_value<std::decay_t<T>>) {
+        return fn;
+    } else {
+        return std::ref(fn);
+    }
+}
+
 } // namespace detail
 } // namespace immer
